@@ -163,6 +163,23 @@
 
   .btn-reset { width: 100%; background: none; border: 1px solid var(--border); color: var(--muted); padding: 12px; border-radius: 14px; font-size: 12px; font-weight: 700; margin-top: 6px; cursor: pointer; }
   .warn-tag { font-size: 9px; color: var(--amber); font-weight: 700; text-transform: uppercase; }
+
+  /* v5 */
+  .link-btn { background:none; border:none; color:var(--blue); font-size:11px; font-weight:700; cursor:pointer; letter-spacing:1px; text-transform:uppercase; font-family:'DM Sans',sans-serif; }
+  .sync-bar { background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:12px 16px; margin-bottom:12px; font-size:12px; color:var(--muted); line-height:1.5; }
+  .glance-row { display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid rgba(255,255,255,0.04); font-size:13px; color:var(--muted); }
+  .glance-row:last-child { border-bottom:none; }
+  .glance-row b { color:var(--text); }
+  .meta-row { padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.04); }
+  .meta-lab { font-size:13px; font-weight:700; margin-bottom:8px; }
+  .meta-cols { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .meta-gap { font-size:11px; color:var(--muted); margin-top:4px; }
+  .mov-row { display:flex; justify-content:space-between; gap:12px; padding:11px 16px; border-bottom:1px solid rgba(255,255,255,0.04); }
+  .mov-row:last-child { border-bottom:none; }
+  .mov-t { font-size:13px; font-weight:600; }
+  .mov-d { font-size:11px; color:var(--muted); margin-top:2px; }
+  .mov-a { font-size:13px; font-weight:700; white-space:nowrap; }
+  .auto-tag { font-size:9px; font-weight:800; color:#0a0a0f; background:var(--green); border-radius:6px; padding:1px 5px; text-transform:uppercase; letter-spacing:.5px; }
 </style>
 </head>
 <body>
@@ -175,6 +192,7 @@
         <div class="home-title">Mis Finanzas</div>
         <div class="home-date" id="homeDate"></div>
       </div>
+      <div class="card" id="homeGlance" style="margin-top:22px;padding:6px 16px;"></div>
       <div class="home-buttons">
         <button class="home-btn home-btn-inv" onclick="goScreen('inversiones')">
           <span class="home-btn-icon">📈</span>
@@ -202,6 +220,12 @@
     </div>
     <div class="view active" style="padding-top:16px;">
 
+      <div class="sync-bar" id="syncBar"></div>
+
+      <div class="card" id="metasCard"></div>
+
+      <div id="trasladoCard"></div>
+
       <div class="countdown-card">
         <div class="cd-label">Próxima compra en bloque</div>
         <div class="cd-title">Acciones Dinámico → acciones</div>
@@ -213,8 +237,8 @@
       <div class="section-row">
         <div class="section-title" style="margin-bottom:0">Portafolio total</div>
         <div style="display:flex;gap:14px;">
-          <button onclick="exportarEstado()" style="background:none;border:none;color:var(--purple);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase;font-family:'DM Sans',sans-serif;">Copiar estado</button>
-          <button onclick="buildPortfolioModalFields();openModal('portfolioModal')" style="background:none;border:none;color:var(--blue);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase;font-family:'DM Sans',sans-serif;">Actualizar</button>
+          <button class="link-btn" style="color:var(--purple)" onclick="exportarEstado()">Copiar estado</button>
+          <button class="link-btn" onclick="buildPortfolioModalFields();openModal('portfolioModal')">Detalle</button>
         </div>
       </div>
       <div class="card">
@@ -227,15 +251,16 @@
       <div class="section-title">Instrumentos</div>
       <div id="instrumentList"></div>
 
-      <div class="section-title" style="margin-top:16px">Otros saldos</div>
+      <div class="section-title" style="margin-top:16px">Fondo de emergencia</div>
       <div class="card">
         <div class="portfolio-row">
-          <div class="portfolio-top"><span class="portfolio-name">Fondo de emergencia (Nu)</span><span class="portfolio-val" id="feVal" style="color:var(--red)"></span></div>
-        </div>
-        <div class="portfolio-row">
-          <div class="portfolio-top"><span class="portfolio-name">Nu disponible (buffer)</span><span class="portfolio-val" id="nuVal" style="color:var(--purple)"></span></div>
+          <div class="portfolio-top"><span class="portfolio-name">Saldo FE</span><span class="portfolio-val" id="feVal" style="color:var(--red)"></span></div>
+          <div class="portfolio-pct" id="feSub"></div>
         </div>
       </div>
+
+      <div class="section-title" style="margin-top:16px">Movimientos detectados</div>
+      <div class="card" id="movList"></div>
 
     </div>
   </div>
@@ -385,259 +410,527 @@
   </div>
 </div>
 
-<script>
-// ─── STORAGE ──────────────────────────────────────────────────────────────
-const KEY = 'samuel_finanzas_v4';
+<!-- MODAL: Snapshot rápido -->
+<div class="modal-overlay" id="quickModal" onclick="closeModalOutside(event,'quickModal')">
+  <div class="modal-box">
+    <div class="modal-title">Snapshot rápido</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Tres números, en 30 segundos. El detalle por instrumento se prorratea según la composición anterior y queda marcado como estimado.</div>
+    <div class="modal-label">Trii · total (portafolio + disponible)</div>
+    <input type="text" inputmode="decimal" id="qTrii">
+    <div class="modal-label">Bancolombia · total de fondos</div>
+    <input type="text" inputmode="decimal" id="qBc">
+    <div id="qNuRow" style="display:none"><div class="modal-label">Nu inversión</div><input type="text" inputmode="decimal" id="qNu"></div>
+    <div class="modal-label">Fondo de emergencia (Nu)</div>
+    <input type="text" inputmode="decimal" id="qFe">
+    <button class="btn-primary" onclick="saveQuick()">Guardar snapshot</button>
+    <button class="btn-secondary" onclick="closeModal('quickModal')">Cancelar</button>
+  </div>
+</div>
 
+<!-- MODAL: Conector y respaldo -->
+<div class="modal-overlay" id="configModal" onclick="closeModalOutside(event,'configModal')">
+  <div class="modal-box">
+    <div class="modal-title">Conector y respaldo</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">URL y token del conector de Gmail (Apps Script). Se pegan una sola vez; ver README. Con el conector activo, la app trae sola los movimientos y respalda su estado.</div>
+    <div class="modal-label">URL del conector (termina en /exec)</div>
+    <input type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/.../exec">
+    <div class="modal-label">Token</div>
+    <input type="text" id="cfgToken" placeholder="token del conector">
+    <button class="btn-primary" onclick="saveConfig()">Guardar y sincronizar</button>
+    <div class="modal-label" style="margin-top:20px">Respaldo manual</div>
+    <button class="btn-secondary" onclick="exportarJSON()">Descargar respaldo (.json)</button>
+    <textarea id="cfgImport" placeholder="Pega aquí un respaldo para importarlo" style="width:100%;height:70px;margin-top:8px;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:12px;padding:10px;color:var(--text);font-size:12px;"></textarea>
+    <button class="btn-secondary" onclick="importarJSON()">Importar respaldo</button>
+    <button class="btn-secondary" onclick="closeModal('configModal')">Cerrar</button>
+  </div>
+</div>
+
+<script>
+// ─── CONSTANTES ───────────────────────────────────────────────────────────
+const KEY = 'samuel_finanzas_v5';
+const OLD_KEY = 'samuel_finanzas_v4';
+const SEED_DATE = '2026-10-04';       // último snapshot completo (capturas del usuario)
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const DAY_NAMES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+const STALE_DAYS = 14;
 
 function nowMonth() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 }
+function todayISO() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function todayLabel() {
   const d = new Date();
   return `${DAY_NAMES[d.getDay()]}, ${d.getDate()} de ${MONTH_NAMES[d.getMonth()]} de ${d.getFullYear()}`;
 }
+function daysSince(iso) {
+  if (!iso) return null;
+  const a = new Date(iso.slice(0,10) + 'T12:00:00');
+  const b = new Date(todayISO() + 'T12:00:00');
+  return Math.round((b - a) / 86400000);
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-function defaultState() {
-  const m = nowMonth();
-  const whoopRedirectActive = m < '2026-08'; // Whoop salió de egresos fijos; ese monto va a FE hasta agosto 2026
-  return {
-    month: m,
-    ingresos: [
-      {id:'cme', label:'CME', amount:700000, paid:false},
-      {id:'lmg', label:'LMG', amount:450000, paid:false},
-      {id:'lote', label:'LOTE', amount:700361, paid:false},
-      {id:'jmem', label:'Préstamo JMEM', amount:225000, paid:false},
-    ],
-    egresos: [
-      {id:'fe', label:'Fondo de Emergencia', amount: whoopRedirectActive ? 173000 : 100000, paid:false, cat:'ahorro', note: whoopRedirectActive ? 'Incluye $73.000 redirigidos de Whoop hasta agosto' : ''},
+// ─── PLAN DE EGRESOS POR MES ──────────────────────────────────────────────
+// Oct 2026 y anteriores: esquema viejo. Nov 2026 en adelante: sin Nu; 200k Trii (500 Acciones US), 150k Bancolombia (Fidurenta), 100k FE.
+// Diciembre 2026: parqueadero queda libre (0). Lavada de carro: se mantiene.
+function planEgresos(m) {
+  const nuevo = m >= '2026-11';
+  const dic = m === '2026-12';
+  const suscripciones = [
+    {id:'claude', label:'Claude (20 USD)', amount:0, paid:false, cat:'suscripcion', usdBased:true, usdAmount:20},
+    {id:'icloud', label:'iCloud', amount:12900, paid:false, cat:'suscripcion'},
+    {id:'gone', label:'Google One', amount:19900, paid:false, cat:'suscripcion'},
+    {id:'cel', label:'Celular', amount:65900, paid:false, cat:'suscripcion'},
+  ];
+  const efectivo = [
+    {id:'retiro_efectivo', label:'Retiro efectivo', amount:450000, paid:false, cat:'efectivo'},
+    {id:'parq', label:'Parqueadero', amount: dic ? 0 : 150000, paid:false, cat:'efectivo', note: dic ? 'Diciembre: libre para ahorrar o gastar' : ''},
+    {id:'lavada', label:'Lavada Carro', amount:100000, paid:false, cat:'efectivo'},
+  ];
+  if (!nuevo) {
+    return [
+      {id:'fe', label:'Fondo de Emergencia', amount:100000, paid:false, cat:'ahorro'},
       {id:'inv_trii', label:'Trii', amount:300000, paid:false, cat:'inversion', instrumentId:null},
       {id:'inv_fic', label:'FIC Bancolombia', amount:150000, paid:false, cat:'inversion', instrumentId:null},
       {id:'inv_nu', label:'Nu (liquidez)', amount:150000, paid:false, cat:'inversion', instrumentId:null},
-      {id:'retiro_efectivo', label:'Retiro efectivo', amount:450000, paid:false, cat:'efectivo'},
-      {id:'parq', label:'Parqueadero', amount:150000, paid:false, cat:'efectivo'},
-      {id:'lavada', label:'Lavada Carro', amount:100000, paid:false, cat:'efectivo'},
-      {id:'claude', label:'Claude (20 USD)', amount:0, paid:false, cat:'suscripcion', usdBased:true, usdAmount:20},
-      {id:'icloud', label:'iCloud', amount:12900, paid:false, cat:'suscripcion'},
-      {id:'gone', label:'Google One', amount:19900, paid:false, cat:'suscripcion'},
-      {id:'cel', label:'Celular', amount:65900, paid:false, cat:'suscripcion'},
-    ],
+      ...efectivo, ...suscripciones,
+    ];
+  }
+  return [
+    {id:'fe', label:'Fondo de Emergencia (Nu)', amount:100000, paid:false, cat:'ahorro'},
+    {id:'inv_trii', label:'Trii → 500 Acciones US', amount:200000, paid:false, cat:'inversion', instrumentId:'acc500us'},
+    {id:'inv_fic', label:'Bancolombia → Fidurenta', amount:150000, paid:false, cat:'inversion', instrumentId:'fidurenta'},
+    ...efectivo, ...suscripciones,
+  ];
+}
+function planIngresos() {
+  return [
+    {id:'cme', label:'CME', amount:700000, paid:false},
+    {id:'lmg', label:'LMG', amount:450000, paid:false},
+    {id:'lote', label:'LOTE', amount:700361, paid:false},
+    {id:'jmem', label:'Préstamo JMEM', amount:225000, paid:false},
+  ];
+}
+
+// Capturas del 4 oct 2026 (usuario). Los fondos de Trii marcados "aprox" vienen redondeados en la captura;
+// su suma sí cuadra con el total de fondos ($6.473.055).
+function instrumentosSeed() {
+  return [
+    {id:'acciones_etf', nombre:'Acciones y ETFs (agregado)', tipo:'accion', plataforma:'Trii', valorActual:2607760, valorAnterior:2607760, aportesPeriodo:0, benchmark:'IUITCO sin stop-loss — rebalancear solo si supera 35-40% del portafolio total. Detalle por acción pendiente de captura.', proximo:'Sin fecha definida'},
+    {id:'acciones_dinamico', nombre:'Acciones Dinámico', tipo:'fondo', plataforma:'Trii · acumulación', valorActual:2620000, valorAnterior:2620000, aportesPeriodo:0, aprox:true, esAcumulacion:true, pisoMinimo:1000000, metaAcumulada:1500000, benchmark:'Piso $1.000.000 + acumular $1.500.000 → compra en bloque', proximo:'Ver contador arriba'},
+    {id:'acc500us', nombre:'500 Acciones US', tipo:'fondo', plataforma:'Trii · largo plazo', valorActual:2390000, valorAnterior:2390000, aportesPeriodo:0, aprox:true, benchmark:'Destino del aporte mensual a Trii (diversifica fuera de acciones colombianas)', proximo:'Aporte mensual de $200.000'},
+    {id:'accicuenta', nombre:'Accicuenta Moderado', tipo:'fondo', plataforma:'Trii · largo plazo', valorActual:1463056, valorAnterior:1463056, aportesPeriodo:0, aprox:true, benchmark:'Capa largo plazo — no tocar', proximo:'Sin fecha de movimiento'},
+    {id:'trii_efectivo', nombre:'Trii · efectivo disponible', tipo:'efectivo', plataforma:'Trii', valorActual:305656, valorAnterior:305656, aportesPeriodo:0, benchmark:'Saldo sin invertir en la cuenta', proximo:'—'},
+    {id:'fidurenta', nombre:'Fidurenta', tipo:'fondo', plataforma:'Bancolombia · largo plazo', valorActual:1557864, valorAnterior:1557864, aportesPeriodo:0, benchmark:'Destino del aporte mensual a Bancolombia. Comisión 1,15%–1,35% E.A. según permanencia (menor cuanto más tiempo)', proximo:'Aporte mensual de $150.000'},
+    {id:'fiduexcedentes', nombre:'Fiduexcedentes', tipo:'fondo', plataforma:'Bancolombia · liquidez', valorActual:1638093, valorAnterior:1638093, aportesPeriodo:0, benchmark:'Sin permanencia, comisión 1,50%. Rentabilidad 30 d: 8,61% E.A. (21 oct 2026)', proximo:'Sin fecha de movimiento'},
+    {id:'nu_inversion', nombre:'Nu inversión (en cierre)', tipo:'liquidez', plataforma:'Nu', valorActual:316476, valorAnterior:316476, aportesPeriodo:0, cerrar:true, benchmark:'Concepto eliminado: se traslada a Bancolombia y Trii (ver tarjeta de traslado)', proximo:'Trasladar'},
+  ];
+}
+const LEGACY_ACCIONES_17JUL = [
+  {nombre:'IUITCO', acciones:10, valor:1588000}, {nombre:'PFCIBEST', acciones:2, valor:130400},
+  {nombre:'GRUBOLIVAR', acciones:2, valor:160840}, {nombre:'ISA', acciones:10, valor:308000},
+];
+function historialSeed() {
+  return [
+    {fecha:'2026-01-01', trii:2684869, bc:1699455, nu:2764218, fe:1818679, sinFE:7148542, fuente:'fotos del usuario'},
+    {fecha:'2026-07-17', trii:7648667.6, bc:2682153.17, nu:null, fe:2165614.19, sinFE:10330820.77, fuente:'snapshot de la app'},
+    {fecha:'2026-10-04', trii:9386472, bc:3195957, nu:316476, fe:1572687, sinFE:12898905, fuente:'capturas del usuario'},
+  ];
+}
+
+function defaultState() {
+  const m = nowMonth();
+  return {
+    v: 5,
+    updatedAt: new Date().toISOString(),
+    month: m,
+    ingresos: planIngresos(),
+    egresos: planEgresos(m),
     gastos: [],
-    fe: {actual: 2165614.19, meta: 5541000, lastUpdate: '2026-07-17'},
-    nuDisponible: {actual: 0},
+    fe: {actual: 1572687, meta: 3000000, lastUpdate: SEED_DATE},
+    metas: {a: 15000000, b: 20000000},
     aporteEstimadoAcumulacion: 100000,
-    instrumentos: [
-      {id:'iuitco', nombre:'IUITCO', tipo:'accion', plataforma:'Trii', acciones:10, valorActual:1588000, valorAnterior:1588000, aportesPeriodo:0, benchmark:'Sin stop-loss — rebalancear solo si supera 35-40% del portafolio total', proximo:'Sin fecha definida'},
-      {id:'pfcibest', nombre:'PFCIBEST', tipo:'accion', plataforma:'Trii', acciones:2, valorActual:130400, valorAnterior:130400, aportesPeriodo:0, benchmark:'Pendiente de definir con el analista', proximo:'Pendiente de definir'},
-      {id:'grubolivar', nombre:'GRUBOLIVAR', tipo:'accion', plataforma:'Trii', acciones:2, valorActual:160840, valorAnterior:160840, aportesPeriodo:0, benchmark:'Pendiente de definir con el analista', proximo:'Pendiente de definir'},
-      {id:'isa', nombre:'ISA', tipo:'accion', plataforma:'Trii', acciones:10, valorActual:308000, valorAnterior:308000, aportesPeriodo:0, benchmark:'Pendiente de definir con el analista', proximo:'Pendiente de definir'},
-      {id:'acciones_dinamico', nombre:'Acciones Dinámico', tipo:'fondo', plataforma:'Trii · acumulación', valorActual:2028323.89, valorAnterior:2028323.89, aportesPeriodo:0, esAcumulacion:true, pisoMinimo:1000000, metaAcumulada:1500000, benchmark:'Piso $1.000.000 + acumular $1.500.000 → compra en bloque', proximo:'Ver contador arriba'},
-      {id:'acc500us', nombre:'500 Acciones US', tipo:'fondo', plataforma:'Trii · largo plazo', valorActual:2166266.23, valorAnterior:2166266.23, aportesPeriodo:0, benchmark:'Capa largo plazo — no tocar', proximo:'Aporte mensual, sin fecha de movimiento'},
-      {id:'accicuenta', nombre:'Accicuenta Moderado', tipo:'fondo', plataforma:'Trii · largo plazo', valorActual:1266837.48, valorAnterior:1266837.48, aportesPeriodo:0, benchmark:'Capa largo plazo — no tocar', proximo:'Aporte mensual, sin fecha de movimiento'},
-      {id:'fidurenta', nombre:'Fidurenta', tipo:'fondo', plataforma:'Bancolombia · largo plazo', valorActual:1300504.68, valorAnterior:1300504.68, aportesPeriodo:0, benchmark:'Capa largo plazo — no tocar', proximo:'Sin fecha de movimiento'},
-      {id:'fiduexcedentes', nombre:'Fiduexcedentes', tipo:'fondo', plataforma:'Bancolombia · largo plazo', valorActual:1381648.49, valorAnterior:1381648.49, aportesPeriodo:0, benchmark:'Capa largo plazo — no tocar', proximo:'Sin fecha de movimiento'},
-    ],
-    lastSnapshotDate: '2026-07-17',
+    instrumentos: instrumentosSeed(),
+    legacyAcciones: LEGACY_ACCIONES_17JUL,
+    lastSnapshotDate: SEED_DATE,
+    historial: historialSeed(),
+    movimientos: [],
+    eventosVistos: [],
+    meses: [],
+    cfg: {feedUrl:'', token:'', lastSync:null, lastError:null, lastEventTs:''},
   };
 }
 
-let S = (() => { try { const r = localStorage.getItem(KEY); return r ? JSON.parse(r) : defaultState(); } catch(e) { return defaultState(); } })();
-
-// Migración blanda: si el mes cambió de julio a agosto, revertir el monto de FE si aplica
-if (S.month !== nowMonth()) {
-  // el mes se maneja al hacer "cerrar mes"; no forzamos nada aquí para no perder datos no guardados
+// ─── CARGA, MIGRACIÓN Y CIERRE AUTOMÁTICO DE MES ─────────────────────────
+function loadState() {
+  try {
+    const r5 = localStorage.getItem(KEY);
+    if (r5) return normalize(JSON.parse(r5));
+  } catch(e) {}
+  try {
+    const r4 = localStorage.getItem(OLD_KEY);
+    if (r4) return migrateV4(JSON.parse(r4));
+  } catch(e) {}
+  return defaultState();
+}
+function normalize(s) {
+  const d = defaultState();
+  const out = Object.assign({}, d, s);
+  out.cfg = Object.assign({}, d.cfg, s.cfg || {});
+  out.metas = Object.assign({}, d.metas, s.metas || {});
+  ['historial','movimientos','eventosVistos','meses','gastos'].forEach(k => { if (!Array.isArray(out[k])) out[k] = d[k]; });
+  return out;
+}
+// Conserva lo del mes en curso (ingresos, gastos, marcas de pago) y toma los saldos más recientes entre v4 y las capturas del 4 oct.
+function migrateV4(old) {
+  const s = defaultState();
+  const oldIsNewer = old.lastSnapshotDate && old.lastSnapshotDate >= SEED_DATE;
+  if (oldIsNewer) {
+    s.instrumentos = old.instrumentos;
+    s.lastSnapshotDate = old.lastSnapshotDate;
+    s.fe = Object.assign({}, old.fe, {meta: s.fe.meta});
+  }
+  if (old.month === s.month) {
+    s.ingresos = old.ingresos || s.ingresos;
+    s.egresos = old.egresos || s.egresos;
+    s.gastos = old.gastos || [];
+  }
+  if (old.aporteEstimadoAcumulacion) s.aporteEstimadoAcumulacion = old.aporteEstimadoAcumulacion;
+  return s;
+}
+// Si el mes cambió desde la última vez que se abrió la app, archiva el mes y abre el nuevo con su plan.
+function autoRollover() {
+  let changed = false;
+  while (S.month < nowMonth()) {
+    S.meses.push({
+      mes: S.month,
+      ingresos: totalIngresos(), egresos: totalEgresos(), gastado: totalGastado(),
+      pagados: S.egresos.filter(e=>e.paid).length + '/' + S.egresos.length,
+      gastos: S.gastos,
+    });
+    const [y, mm] = S.month.split('-').map(Number);
+    S.month = mm === 12 ? `${y+1}-01` : `${y}-${String(mm+1).padStart(2,'0')}`;
+    S.ingresos = planIngresos().map(n => { const o = S.ingresos.find(i=>i.id===n.id); return o ? {...n, label:o.label, amount:o.amount} : n; });
+    S.egresos = planEgresos(S.month);
+    S.gastos = [];
+    changed = true;
+  }
+  if (changed) save();
 }
 
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} }
+let S = loadState();
 
+function save() {
+  S.updatedAt = new Date().toISOString();
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {}
+  schedulePush();
+}
+
+// ─── FORMATOS ─────────────────────────────────────────────────────────────
 function fmt(n) {
   const sign = n < 0 ? '-' : '';
   return sign + '$' + Math.round(Math.abs(n)).toLocaleString('es-CO');
 }
-function fmtSigned(n) {
-  return (n >= 0 ? '+' : '-') + '$' + Math.round(Math.abs(n)).toLocaleString('es-CO');
-}
-// Acepta formatos como "2'165.614,19" o "2.165.614,19" o "2165614.19"
+function fmtSigned(n) { return (n >= 0 ? '+' : '-') + '$' + Math.round(Math.abs(n)).toLocaleString('es-CO'); }
+function pct(n, d) { return d > 0 ? (Math.round(n / d * 1000) / 10).toLocaleString('es-CO', {minimumFractionDigits:1, maximumFractionDigits:1}) + '%' : '—'; }
+// Acepta "2'165.614,19", "2.165.614,19" o "2165614.19"
 function parseCOPNumber(raw) {
   if (raw === null || raw === undefined) return NaN;
-  let s = String(raw).trim().replace(/[’'`\s]/g, '');
-  if (s.includes(',')) {
-    s = s.replace(/\./g, '').replace(',', '.');
-  } else {
+  let s = String(raw).trim().replace(/[’'`\s$]/g, '');
+  if (s.includes(',')) { s = s.replace(/\./g, '').replace(',', '.'); }
+  else {
     const parts = s.split('.');
-    if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
-      s = s.replace(/\./g, '');
-    }
+    if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) s = s.replace(/\./g, '');
   }
   return parseFloat(s);
 }
 
 let editMode = false;
-
 function totalIngresos() { return S.ingresos.reduce((s,i)=>s+i.amount,0); }
 function totalEgresos() { return S.egresos.reduce((s,i)=>s+i.amount,0); }
 function totalGastado() { return S.gastos.reduce((s,g)=>s+g.amount,0); }
 function totalInstrumentos() { return S.instrumentos.reduce((s,i)=>s+i.valorActual,0); }
+function grupoDe(i) { return i.plataforma.startsWith('Trii') ? 'trii' : i.plataforma.startsWith('Bancolombia') ? 'bc' : 'nu'; }
+function totalGrupo(g) { return S.instrumentos.filter(i=>grupoDe(i)===g).reduce((s,i)=>s+i.valorActual,0); }
 
 const CAT_COLOR = {ahorro:'#4ade80', inversion:'#60a5fa', efectivo:'#f59e0b', suscripcion:'#a78bfa', comida:'#fb7185', 'diversión':'#f472b6', otro:'#94a3b8'};
 const CAT_LABEL = {ahorro:'Ahorro', inversion:'Inversión', efectivo:'Efectivo', suscripcion:'Suscripciones', comida:'Comida', 'diversión':'Diversión', otro:'Otro'};
 
-// ─── NAVIGATION ─────────────────────────────────────────────────────────────
+// ─── NAVEGACIÓN ───────────────────────────────────────────────────────────
 function goScreen(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
   window.scrollTo(0,0);
   if (name === 'inversiones') renderInversiones();
   if (name === 'diaadia') renderAll();
+  if (name === 'home') renderHome();
 }
-
 function switchTab(tab) {
   document.querySelectorAll('#screen-diaadia .tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('#screen-diaadia .view').forEach(v => v.classList.remove('active'));
   event.currentTarget.classList.add('active');
   document.getElementById('view-' + tab).classList.add('active');
 }
-
 function openModal(id) { document.getElementById(id).classList.add('active'); }
 function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 function closeModalOutside(e, id) { if (e.target.id === id) closeModal(id); }
 
-// ─── RENDER: HOME ───────────────────────────────────────────────────────────
+// ─── HOME ─────────────────────────────────────────────────────────────────
 function renderHome() {
   document.getElementById('homeDate').textContent = todayLabel();
-  const pend = S.egresos.find(e=>e.pending);
-  document.getElementById('homeFoot').textContent = pend ? '⚠ Tienes datos pendientes de actualizar en Egresos' : '';
+  const sinFE = totalInstrumentos();
+  const edad = daysSince(S.lastSnapshotDate);
+  const stale = edad !== null && edad > STALE_DAYS;
+  document.getElementById('homeGlance').innerHTML = `
+    <div class="glance-row"><span>Portafolio (sin FE)</span><b>${fmt(sinFE)}</b></div>
+    <div class="glance-row"><span>Meta ${fmt(S.metas.a)}</span><b>${pct(sinFE, S.metas.a)}</b></div>
+    <div class="glance-row"><span>Fondo de emergencia</span><b>${pct(S.fe.actual, S.fe.meta)}</b></div>
+    <div class="glance-row"><span>Saldos al ${esc(S.lastSnapshotDate)}</span><b style="color:${stale?'var(--amber)':'var(--green)'}">${edad} d${stale?' · actualiza':''}</b></div>`;
+  const notes = [];
+  if (S.egresos.find(e=>e.pending)) notes.push('⚠ Datos pendientes en Egresos');
+  const mo = S.month.slice(5);
+  if (mo === '01' || mo === '02') notes.push('Ingresos cambian por ajuste inflacionario: edítalos en Día a Día ✎');
+  if (!S.cfg.feedUrl) notes.push('Conector de Gmail sin configurar (Inversiones → Conector)');
+  document.getElementById('homeFoot').textContent = notes.join(' · ');
 }
 
-// ─── RENDER: INVERSIONES ────────────────────────────────────────────────────
-function renderInversiones() {
-  document.getElementById('invTotal').textContent = fmt(totalInstrumentos());
-  document.getElementById('ptTotal') && (document.getElementById('ptTotal').textContent = fmt(totalInstrumentos()));
-  document.getElementById('feVal').textContent = fmt(S.fe.actual);
-  document.getElementById('nuVal').textContent = fmt(S.nuDisponible.actual);
+// ─── INVERSIONES ──────────────────────────────────────────────────────────
+function renderSyncBar() {
+  const edad = daysSince(S.lastSnapshotDate);
+  const stale = edad !== null && edad > STALE_DAYS;
+  let feed;
+  if (!S.cfg.feedUrl) feed = '<span style="color:var(--amber)">Conector sin configurar</span>';
+  else if (S.cfg.lastError) feed = '<span style="color:var(--red)">Conector con error</span>';
+  else if (S.cfg.lastSync) feed = `Conector OK · ${esc(new Date(S.cfg.lastSync).toLocaleString('es-CO', {dateStyle:'short', timeStyle:'short'}))}`;
+  else feed = 'Conector sin sincronizar';
+  document.getElementById('syncBar').innerHTML = `
+    <div><b style="color:${stale?'var(--amber)':'var(--green)'}">Saldos al ${esc(S.lastSnapshotDate)} (${edad} d)</b>${stale?' · valores estimados':''}</div>
+    <div>${feed}</div>
+    <div style="display:flex;gap:12px;margin-top:6px;">
+      <button class="link-btn" onclick="syncAll(true)">Sincronizar</button>
+      <button class="link-btn" onclick="openQuick()">Snapshot rápido</button>
+      <button class="link-btn" onclick="openConfig()">Conector</button>
+    </div>`;
+}
 
-  // Countdown Acciones Dinámico
+function renderMetas() {
+  const sinFE = totalInstrumentos(), conFE = sinFE + S.fe.actual;
+  const row = (lab, meta) => `
+    <div class="meta-row"><div class="meta-lab">${lab}</div>
+      <div class="meta-cols">
+        <div><span class="mini-label">Sin FE</span><div class="mini-val">${pct(sinFE, meta)}</div><div class="meta-gap">faltan ${fmt(Math.max(0, meta - sinFE))}</div></div>
+        <div><span class="mini-label">Con FE</span><div class="mini-val">${pct(conFE, meta)}</div><div class="meta-gap">faltan ${fmt(Math.max(0, meta - conFE))}</div></div>
+      </div></div>`;
+  const feFalta = Math.max(0, S.fe.meta - S.fe.actual);
+  const meses = feFalta > 0 ? Math.ceil(feFalta / 100000) : 0;
+  document.getElementById('metasCard').innerHTML = `
+    <div class="section-title" style="padding:12px 16px 0;margin:0">Metas</div>
+    ${row('Meta ' + fmt(S.metas.a), S.metas.a)}
+    ${row('Meta ' + fmt(S.metas.b), S.metas.b)}
+    <div class="meta-row"><div class="meta-lab">Fondo de emergencia · meta ${fmt(S.fe.meta)} <button class="link-btn" onclick="editFEMeta()">editar</button></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100, S.fe.actual / S.fe.meta * 100)}%;background:var(--red)"></div></div>
+      <div class="meta-gap">${fmt(S.fe.actual)} · ${pct(S.fe.actual, S.fe.meta)} · faltan ${fmt(feFalta)}${meses ? ' (≈ ' + meses + ' meses a $100.000)' : ''}</div></div>
+    ${sparkline()}`;
+}
+function sparkline() {
+  const pts = S.historial.filter(h => h.sinFE != null).map(h => ({f:h.fecha, v:h.sinFE}));
+  if (pts.length < 2) return '';
+  const w = 300, h = 60, min = Math.min(...pts.map(p=>p.v)), max = Math.max(...pts.map(p=>p.v));
+  const t0 = new Date(pts[0].f).getTime(), t1 = new Date(pts[pts.length-1].f).getTime() || t0 + 1;
+  const xy = p => `${((new Date(p.f).getTime() - t0) / (t1 - t0 || 1) * (w - 10) + 5).toFixed(1)},${(h - 8 - (p.v - min) / ((max - min) || 1) * (h - 16)).toFixed(1)}`;
+  return `<div style="padding:4px 16px 14px"><div class="mini-label">Portafolio sin FE · historial</div>
+    <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}"><polyline fill="none" stroke="var(--blue)" stroke-width="2" points="${pts.map(xy).join(' ')}"/>
+    ${pts.map(p => { const [x,y] = xy(p).split(','); return `<circle cx="${x}" cy="${y}" r="3" fill="var(--blue)"/>`; }).join('')}</svg>
+    <div class="meta-gap">${pts.map(p => esc(p.f.slice(5)) + ' ' + (p.v/1e6).toFixed(2) + 'M').join(' · ')}</div></div>`;
+}
+function editFEMeta() {
+  const v = prompt('Meta del fondo de emergencia (COP):', S.fe.meta);
+  if (v === null) return;
+  const n = parseCOPNumber(v);
+  if (!isNaN(n) && n > 0) { S.fe.meta = n; save(); renderInversiones(); }
+}
+
+function renderTraslado() {
+  const nu = S.instrumentos.find(i => i.id === 'nu_inversion');
+  const el = document.getElementById('trasladoCard');
+  if (!nu || nu.valorActual <= 0) { el.innerHTML = ''; return; }
+  const bcPart = Math.round(nu.valorActual * 150 / 350 / 1000) * 1000;   // mismo reparto que el aporte mensual: 150k BC : 200k Trii
+  const triiPart = nu.valorActual - bcPart;
+  el.innerHTML = `<div class="countdown-card" style="border-color:rgba(245,158,11,0.35)">
+    <div class="cd-label" style="color:var(--amber)">Traslado pendiente · cerrar Nu inversión</div>
+    <div class="cd-title">Mover ${fmt(nu.valorActual)}</div>
+    <div class="cd-sub" style="margin-top:6px">→ Fidurenta ${fmt(bcPart)}<br>→ 500 Acciones US (Trii) ${fmt(triiPart)}<br>Reparto proporcional al aporte mensual (150k : 200k). Mueve el dinero en las apps y luego confirma aquí.</div>
+    <button class="cd-edit" onclick="confirmTraslado(${bcPart},${triiPart})">Ya lo moví</button></div>`;
+}
+function confirmTraslado(bcPart, triiPart) {
+  const nu = S.instrumentos.find(i => i.id === 'nu_inversion');
+  const fr = S.instrumentos.find(i => i.id === 'fidurenta');
+  const us = S.instrumentos.find(i => i.id === 'acc500us');
+  if (!nu || !fr || !us) return;
+  if (!confirm(`¿Confirmas que ya moviste ${fmt(nu.valorActual)} (Fidurenta ${fmt(bcPart)} · 500 US ${fmt(triiPart)})?`)) return;
+  fr.valorAnterior = fr.valorActual; fr.valorActual += bcPart;
+  us.valorAnterior = us.valorActual; us.valorActual += triiPart;
+  nu.valorAnterior = nu.valorActual; nu.valorActual = 0;
+  logMov({tipo:'traslado', monto:bcPart + triiPart, detalle:'Nu inversión → Fidurenta + 500 US', fecha:todayISO()});
+  save(); renderInversiones();
+}
+
+function renderInversiones() {
+  renderSyncBar();
+  renderMetas();
+  renderTraslado();
+  document.getElementById('invTotal').textContent = fmt(totalInstrumentos());
+  document.getElementById('feVal').textContent = fmt(S.fe.actual);
+  document.getElementById('feSub').textContent = 'Nu · Cajita Fondo de Emergencia' + (S.fe.lastUpdate ? ' · al ' + S.fe.lastUpdate : '');
+
   const ad = S.instrumentos.find(i=>i.id==='acciones_dinamico');
   const metaTotal = ad.pisoMinimo + ad.metaAcumulada;
   const faltante = Math.max(0, metaTotal - ad.valorActual);
   const aporte = S.aporteEstimadoAcumulacion || 100000;
   const dias = faltante === 0 ? 0 : Math.ceil((faltante / aporte) * 30);
-  document.getElementById('cdDays').innerHTML = faltante === 0
-    ? '¡Meta lista! <span>ejecutar compra</span>'
-    : dias + '<span> días est.</span>';
+  document.getElementById('cdDays').innerHTML = faltante === 0 ? '¡Meta lista! <span>ejecutar compra</span>' : dias + '<span> días est.</span>';
   document.getElementById('cdSub').textContent = faltante === 0
-    ? `Acciones Dinámico ya tiene ${fmt(ad.valorActual)}, por encima de la meta de ${fmt(metaTotal)}.`
+    ? `Acciones Dinámico tiene ${fmt(ad.valorActual)}${ad.aprox ? ' (aprox.)' : ''}, por encima de la meta de ${fmt(metaTotal)}.`
     : `Faltan ${fmt(faltante)} de ${fmt(metaTotal)} · estimado a ${fmt(aporte)}/mes`;
 
-  const list = document.getElementById('instrumentList');
-  list.innerHTML = S.instrumentos.map(i => {
+  document.getElementById('instrumentList').innerHTML = S.instrumentos.filter(i => !(i.cerrar && i.valorActual === 0)).map(i => {
     const crecimiento = i.valorActual - i.valorAnterior - i.aportesPeriodo;
-    const esPrimera = S.lastSnapshotDate === defaultState().lastSnapshotDate && i.valorActual === i.valorAnterior && i.aportesPeriodo === 0;
+    const sinCambio = i.valorActual === i.valorAnterior && i.aportesPeriodo === 0;
     const crecColor = crecimiento > 0 ? 'var(--green)' : crecimiento < 0 ? 'var(--red)' : 'var(--muted)';
     return `
     <div class="instr-card">
       <div class="instr-top">
-        <div>
-          <div class="instr-name">${i.nombre}</div>
-          <div class="instr-plat">${i.plataforma}${i.acciones ? ' · ' + i.acciones + ' acciones' : ''}</div>
-        </div>
-        <div>
-          <div class="instr-val">${fmt(i.valorActual)}</div>
-          <div class="instr-grow" style="color:${crecColor}">${esPrimera ? 'primera actualización' : fmtSigned(crecimiento) + ' sin aportes'}</div>
-        </div>
+        <div><div class="instr-name">${esc(i.nombre)}</div><div class="instr-plat">${esc(i.plataforma)}${i.estimado ? ' · estimado' : ''}</div></div>
+        <div><div class="instr-val">${i.aprox ? '≈ ' : ''}${fmt(i.valorActual)}</div>
+        <div class="instr-grow" style="color:${crecColor}">${sinCambio ? 'sin cambios desde el snapshot' : fmtSigned(crecimiento) + ' sin aportes'}</div></div>
       </div>
       <div class="instr-grid">
-        <div class="instr-field">
-          <div class="instr-field-label">Valor anterior</div>
-          <div class="instr-field-val">${fmt(i.valorAnterior)}</div>
-        </div>
-        <div class="instr-field">
-          <div class="instr-field-label">Aportes del período</div>
-          <div class="instr-field-val">${fmt(i.aportesPeriodo)}</div>
-        </div>
+        <div class="instr-field"><div class="instr-field-label">Valor anterior</div><div class="instr-field-val">${fmt(i.valorAnterior)}</div></div>
+        <div class="instr-field"><div class="instr-field-label">Aportes del período</div><div class="instr-field-val">${fmt(i.aportesPeriodo)}</div></div>
       </div>
-      <div class="instr-note"><b>Benchmark:</b> ${i.benchmark}<br><b>Próximo movimiento:</b> ${i.proximo}</div>
+      <div class="instr-note"><b>Nota:</b> ${esc(i.benchmark)}<br><b>Próximo movimiento:</b> ${esc(i.proximo)}</div>
     </div>`;
   }).join('');
+
+  const mv = document.getElementById('movList');
+  mv.innerHTML = S.movimientos.length ? S.movimientos.slice(0, 15).map(m => `
+    <div class="mov-row"><div><div class="mov-t">${esc(movLabel(m.tipo))}${m.auto ? ' <span class="auto-tag">auto</span>' : ''}</div><div class="mov-d">${esc(m.fecha || '')} · ${esc(m.detalle || '')}</div></div>
+    <div class="mov-a">${m.monto ? fmt(m.monto) : ''}</div></div>`).join('')
+    : '<div class="empty-text" style="padding:14px 16px">Sin movimientos detectados todavía. Se llenan solos cuando el conector está configurado.</div>';
+}
+const MOV_LABELS = {trii_deposito:'Depósito en Trii', trii_compra:'Compra en Trii', trii_venta:'Venta en Trii', nu_cdt_apertura:'CDT Nu abierto', nu_cdt_vencimiento:'CDT Nu vencido', bc_ingreso:'Ingreso Bancolombia', bc_egreso:'Egreso Bancolombia', traslado:'Traslado'};
+function movLabel(t) { return MOV_LABELS[t] || t; }
+function logMov(m) {
+  S.movimientos.unshift({id: m.id || 'm' + Date.now(), ts: m.ts || new Date().toISOString(), ...m});
+  S.movimientos = S.movimientos.slice(0, 100);
 }
 
-// ─── EXPORTAR ESTADO (para pegar en el chat de Análisis de perfil e inversiones) ────
-function exportarEstado() {
-  const lines = [];
-  lines.push(`ESTADO FINANZAS — ${todayLabel()}`);
-  lines.push('');
-  lines.push('INSTRUMENTOS:');
+// ─── SNAPSHOT ─────────────────────────────────────────────────────────────
+function pushHistorial(fuente) {
+  const trii = totalGrupo('trii'), bc = totalGrupo('bc'), nu = totalGrupo('nu');
+  const h = {fecha: todayISO(), trii, bc, nu, fe: S.fe.actual, sinFE: trii + bc + nu, fuente};
+  const i = S.historial.findIndex(x => x.fecha === h.fecha);
+  if (i >= 0) S.historial[i] = h; else S.historial.push(h);
+  S.historial.sort((a, b) => a.fecha < b.fecha ? -1 : 1);
+}
+function openQuick() {
+  document.getElementById('qTrii').value = Math.round(totalGrupo('trii'));
+  document.getElementById('qBc').value = Math.round(totalGrupo('bc'));
+  document.getElementById('qFe').value = Math.round(S.fe.actual);
+  const nuRow = document.getElementById('qNuRow');
+  const nu = totalGrupo('nu');
+  nuRow.style.display = nu > 0 ? 'block' : 'none';
+  document.getElementById('qNu').value = Math.round(nu);
+  openModal('quickModal');
+}
+// Tres números (Trii, Bancolombia, FE) reemplazan el detalle por instrumento: se prorratean según la composición anterior y quedan marcados "estimado".
+function saveQuick() {
+  const t = parseCOPNumber(document.getElementById('qTrii').value);
+  const b = parseCOPNumber(document.getElementById('qBc').value);
+  const f = parseCOPNumber(document.getElementById('qFe').value);
+  const nu = parseCOPNumber(document.getElementById('qNu').value);
+  const setGrupo = (g, nuevo) => {
+    if (isNaN(nuevo)) return;
+    const actual = totalGrupo(g);
+    if (actual <= 0) return;
+    const k = nuevo / actual;
+    S.instrumentos.filter(i => grupoDe(i) === g).forEach(i => {
+      i.valorAnterior = i.valorActual; i.valorActual = i.valorActual * k; i.aportesPeriodo = 0; i.estimado = true; i.aprox = false;
+    });
+  };
+  setGrupo('trii', t); setGrupo('bc', b);
+  if (document.getElementById('qNuRow').style.display !== 'none') setGrupo('nu', nu);
+  if (!isNaN(f) && f >= 0) { S.fe.actual = f; S.fe.lastUpdate = todayISO(); }
+  S.lastSnapshotDate = todayISO();
+  pushHistorial('snapshot rápido');
+  save(); closeModal('quickModal'); renderInversiones(); renderHome();
+}
+function savePortfolio() {
   S.instrumentos.forEach(i => {
-    const crecimiento = i.valorActual - i.valorAnterior - i.aportesPeriodo;
-    lines.push(`- ${i.nombre} (${i.plataforma}): actual ${fmt(i.valorActual)} | anterior ${fmt(i.valorAnterior)} | aportes del período ${fmt(i.aportesPeriodo)} | crecimiento sin aportes ${fmtSigned(crecimiento)}`);
+    const input = document.getElementById('ptEdit_' + i.id);
+    const nuevo = parseCOPNumber(input.value);
+    if (!isNaN(nuevo)) { i.valorAnterior = i.valorActual; i.valorActual = nuevo; i.aportesPeriodo = 0; i.estimado = false; i.aprox = false; }
   });
-  lines.push('');
-  lines.push(`Total portafolio (sin FE): ${fmt(totalInstrumentos())}`);
-  lines.push(`Fondo de emergencia: ${fmt(S.fe.actual)} / meta ${fmt(S.fe.meta)} (actualizado: ${S.fe.lastUpdate || 'sin fecha'})`);
-  lines.push(`Nu disponible (buffer, fuera de estrategia): ${fmt(S.nuDisponible.actual)}`);
-  lines.push(`Aporte mensual estimado hacia Acciones Dinámico: ${fmt(S.aporteEstimadoAcumulacion)}`);
-  const ad = S.instrumentos.find(i=>i.id==='acciones_dinamico');
-  if (ad) {
-    const metaTotal = ad.pisoMinimo + ad.metaAcumulada;
-    const faltante = Math.max(0, metaTotal - ad.valorActual);
-    lines.push(`Meta acumulación Acciones Dinámico: ${fmt(metaTotal)} (piso ${fmt(ad.pisoMinimo)} + acumular ${fmt(ad.metaAcumulada)}) — faltan ${fmt(faltante)}`);
-  }
-  lines.push('');
-  lines.push('EGRESOS FIJOS DEL MES (categoría Inversión):');
-  S.egresos.filter(e=>e.cat==='inversion').forEach(e => {
-    lines.push(`- ${e.label}: ${fmt(e.amount)} — ${e.paid ? 'pagado ✓' : 'pendiente'}`);
-  });
-  lines.push('');
-  lines.push(`Último snapshot de portafolio: ${S.lastSnapshotDate}`);
-  const text = lines.join('\n');
-  copyToClipboard(text);
+  S.lastSnapshotDate = todayISO();
+  pushHistorial('detalle por instrumento');
+  save(); closeModal('portfolioModal'); renderInversiones(); renderHome();
+}
+function buildPortfolioModalFields() {
+  document.getElementById('portfolioEditFields').innerHTML = S.instrumentos.map(i => `
+    <div class="modal-label">${esc(i.nombre)} <span style="color:var(--dim);text-transform:none;">(actual: ${fmt(i.valorActual)})</span></div>
+    <input type="number" id="ptEdit_${i.id}" value="${Math.round(i.valorActual)}">`).join('');
 }
 
+// ─── EXPORTAR / IMPORTAR / ESTADO PARA EL CHAT ────────────────────────────
+function exportarEstado() {
+  const L = [];
+  L.push(`ESTADO FINANZAS — ${todayLabel()}`, '', 'INSTRUMENTOS:');
+  S.instrumentos.forEach(i => L.push(`- ${i.nombre} (${i.plataforma}): ${i.aprox?'≈ ':''}${fmt(i.valorActual)} | anterior ${fmt(i.valorAnterior)} | aportes ${fmt(i.aportesPeriodo)}`));
+  L.push('', `Portafolio sin FE: ${fmt(totalInstrumentos())} (${pct(totalInstrumentos(), S.metas.a)} de ${fmt(S.metas.a)}; ${pct(totalInstrumentos(), S.metas.b)} de ${fmt(S.metas.b)})`);
+  L.push(`Fondo de emergencia: ${fmt(S.fe.actual)} / ${fmt(S.fe.meta)} (${pct(S.fe.actual, S.fe.meta)})`);
+  L.push(`Saldos al: ${S.lastSnapshotDate}`);
+  copyToClipboard(L.join('\n'));
+}
+function exportarJSON() {
+  const data = JSON.stringify(S, null, 1);
+  const blob = new Blob([data], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `finanzas-respaldo-${todayISO()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function importarJSON() {
+  const raw = document.getElementById('cfgImport').value.trim();
+  if (!raw) return;
+  try {
+    const obj = normalize(JSON.parse(raw));
+    obj.cfg = S.cfg;
+    S = obj; save(); closeModal('configModal'); renderAll(); renderInversiones(); renderHome();
+    toast('Respaldo importado');
+  } catch(e) { toast('JSON inválido'); }
+}
 function copyToClipboard(text) {
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(
-      () => toast('Copiado — pégalo en el chat de inversiones'),
-      () => fallbackCopy(text)
-    );
-  } else {
-    fallbackCopy(text);
-  }
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast('Copiado'), () => fallbackCopy(text));
+  else fallbackCopy(text);
 }
-
 function fallbackCopy(text) {
   const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
-  document.body.appendChild(ta);
-  ta.focus();
-  ta.select();
-  try {
-    document.execCommand('copy');
-    toast('Copiado — pégalo en el chat de inversiones');
-  } catch (e) {
-    toast('No se pudo copiar automático, revisa la consola');
-  }
+  ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try { document.execCommand('copy'); toast('Copiado'); } catch (e) { toast('No se pudo copiar'); }
   document.body.removeChild(ta);
 }
-
 function toast(msg) {
   let t = document.getElementById('toastMsg');
   if (!t) {
-    t = document.createElement('div');
-    t.id = 'toastMsg';
+    t = document.createElement('div'); t.id = 'toastMsg';
     t.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:var(--purple);color:#0a0a0f;padding:10px 18px;border-radius:12px;font-size:12px;font-weight:700;z-index:200;max-width:80%;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.4);';
     document.body.appendChild(t);
   }
-  t.textContent = msg;
-  t.style.display = 'block';
-  clearTimeout(t._hideTimer);
-  t._hideTimer = setTimeout(() => { t.style.display = 'none'; }, 2500);
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._hideTimer); t._hideTimer = setTimeout(() => { t.style.display = 'none'; }, 2500);
 }
-
 function editAporteEstimado() {
   const v = prompt('Aporte mensual estimado hacia Acciones Dinámico (COP):', S.aporteEstimadoAcumulacion);
   if (v === null) return;
@@ -645,39 +938,92 @@ function editAporteEstimado() {
   if (!isNaN(n) && n >= 0) { S.aporteEstimadoAcumulacion = n; save(); renderInversiones(); }
 }
 
-function savePortfolio() {
-  S.instrumentos.forEach(i => {
-    const input = document.getElementById('ptEdit_' + i.id);
-    const nuevo = parseCOPNumber(input.value);
-    if (!isNaN(nuevo)) {
-      i.valorAnterior = i.valorActual;
-      i.valorActual = nuevo;
-      i.aportesPeriodo = 0;
+// ─── CONECTOR (Apps Script) ───────────────────────────────────────────────
+function openConfig() {
+  document.getElementById('cfgUrl').value = S.cfg.feedUrl || '';
+  document.getElementById('cfgToken').value = S.cfg.token || '';
+  document.getElementById('cfgImport').value = '';
+  openModal('configModal');
+}
+function saveConfig() {
+  S.cfg.feedUrl = document.getElementById('cfgUrl').value.trim();
+  S.cfg.token = document.getElementById('cfgToken').value.trim();
+  S.cfg.lastError = null;
+  save(); closeModal('configModal'); syncAll(true);
+}
+function feedGet(params) {
+  const q = new URLSearchParams({token: S.cfg.token, ...params}).toString();
+  return fetch(S.cfg.feedUrl + (S.cfg.feedUrl.includes('?') ? '&' : '?') + q).then(r => r.json());
+}
+let syncing = false;
+async function syncAll(manual) {
+  if (!S.cfg.feedUrl || !S.cfg.token) { if (manual) toast('Configura el conector primero'); renderSyncBar(); return; }
+  if (syncing) return;
+  syncing = true;
+  try {
+    // 1) estado remoto más nuevo (otro dispositivo / respaldo)
+    const st = await feedGet({action:'state'});
+    if (st.error) throw new Error('token inválido');
+    if (st.state && st.state.updatedAt > S.updatedAt) {
+      const cfg = S.cfg;
+      S = normalize(st.state); S.cfg = cfg;
     }
+    // 2) eventos nuevos de Gmail
+    const ev = await feedGet({action:'events', since: S.cfg.lastEventTs || ''});
+    if (ev.error) throw new Error('token inválido');
+    applyEvents(ev.events || []);
+    S.cfg.lastSync = new Date().toISOString(); S.cfg.lastError = null;
+    autoRollover();
+    save();
+    if (manual) toast(`Sincronizado · ${(ev.events || []).length} eventos`);
+  } catch (e) {
+    S.cfg.lastError = String(e.message || e);
+    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(_) {}
+    if (manual) toast('Error del conector: ' + S.cfg.lastError);
+  }
+  syncing = false;
+  renderAll(); renderInversiones(); renderHome();
+}
+let pushTimer = null;
+function schedulePush() {
+  if (!S || !S.cfg || !S.cfg.feedUrl || !S.cfg.token) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => {
+    const copy = JSON.parse(JSON.stringify(S));
+    copy.cfg = {};                      // la URL y el token no se suben
+    fetch(S.cfg.feedUrl, {method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({token: S.cfg.token, state: copy})}).catch(()=>{});
+  }, 3000);
+}
+
+// Reglas automáticas (solo para eventos del mes en curso; los anteriores solo se registran):
+//  - Depósito en Trii >= aporte planeado → marca el aporte a Trii como pagado.
+//  - Ingreso en Bancolombia con monto igual a un ingreso pendiente → lo marca como recibido.
+function applyEvents(events) {
+  const seen = new Set(S.eventosVistos);
+  events.sort((a, b) => a.ts < b.ts ? -1 : 1).forEach(ev => {
+    if (seen.has(ev.id)) return;
+    seen.add(ev.id);
+    const enMes = (ev.fecha || '').slice(0, 7) === S.month;
+    let auto = false;
+    if (enMes && ev.tipo === 'trii_deposito' && ev.monto) {
+      const e = S.egresos.find(x => x.id === 'inv_trii' && !x.paid && ev.monto >= x.amount);
+      if (e) { applyEgresoToggle(e); e.autoEv = ev.id; auto = true; }
+    }
+    if (enMes && ev.tipo === 'bc_ingreso' && ev.monto) {
+      const i = S.ingresos.find(x => !x.paid && Math.abs(x.amount - ev.monto) < 1);
+      if (i) { i.paid = true; i.autoEv = ev.id; auto = true; }
+    }
+    logMov({id: ev.id, ts: ev.ts, tipo: ev.tipo, monto: ev.monto, detalle: ev.detalle, fecha: ev.fecha, auto});
+    if (!S.cfg.lastEventTs || ev.ts > S.cfg.lastEventTs) S.cfg.lastEventTs = ev.ts;
   });
-  S.lastSnapshotDate = new Date().toISOString().slice(0,10);
-  save();
-  closeModal('portfolioModal');
-  renderInversiones();
+  S.eventosVistos = Array.from(seen).slice(-600);
 }
 
-function buildPortfolioModalFields() {
-  const c = document.getElementById('portfolioEditFields');
-  c.innerHTML = S.instrumentos.map(i => `
-    <div class="modal-label">${i.nombre} <span style="color:var(--dim);text-transform:none;">(actual: ${fmt(i.valorActual)})</span></div>
-    <input type="number" id="ptEdit_${i.id}" placeholder="Nuevo valor actual en COP" value="${Math.round(i.valorActual)}">
-  `).join('');
-}
-
-// ─── RENDER: DÍA A DÍA ───────────────────────────────────────────────────────
+// ─── DÍA A DÍA ────────────────────────────────────────────────────────────
 function renderAll() {
   document.getElementById('headerMonth').textContent = MONTH_NAMES[parseInt(S.month.split('-')[1],10)-1] + ' ' + S.month.split('-')[0];
-
-  const ing = totalIngresos();
-  const eg = totalEgresos();
-  const gast = totalGastado();
+  const ing = totalIngresos(), eg = totalEgresos(), gast = totalGastado();
   const disponible = ing - eg - gast;
-
   document.getElementById('heroAmount').textContent = fmt(disponible);
   document.getElementById('miniIngresos').textContent = fmt(ing);
   document.getElementById('miniEgresos').textContent = fmt(eg);
@@ -689,7 +1035,7 @@ function renderAll() {
   document.getElementById('ringInv').setAttribute('stroke-dashoffset', circ - (circ*Math.min(tasaInv,100)/100));
   document.getElementById('ringInvLabel').textContent = tasaInv + '%';
   document.getElementById('ringInvSub').textContent = `${tasaInv}% de ingresos → inversión`;
-  document.getElementById('ringInvTag').innerHTML = tasaInv >= 10 ? '✓ Muy por encima del 10% recomendado' : '⚠ Por debajo del 10% recomendado';
+  document.getElementById('ringInvTag').innerHTML = tasaInv >= 10 ? '✓ Por encima del 10% recomendado' : '⚠ Por debajo del 10% recomendado';
   document.getElementById('ringInvTag').style.color = tasaInv >= 10 ? 'var(--green)' : 'var(--amber)';
 
   const fePct = Math.min(100, Math.round((S.fe.actual/S.fe.meta)*100));
@@ -697,24 +1043,20 @@ function renderAll() {
   document.getElementById('ringFELabel').textContent = fePct + '%';
   document.getElementById('feSubtitle').textContent = `${fmt(S.fe.actual)} / ${fmt(S.fe.meta)}`;
   document.getElementById('feBar').style.width = fePct + '%';
-
   document.getElementById('ptTotal').textContent = fmt(totalInstrumentos());
 
-  // Ingresos
   const ic = document.getElementById('ingresosCard');
   const ingPagado = S.ingresos.filter(i=>i.paid).reduce((s,i)=>s+i.amount,0);
   ic.innerHTML = S.ingresos.map((item) => `
     <div class="card-row">
       <div class="check ${item.paid?'done':''}" style="${item.paid?'background:var(--green)':''}" onclick="toggleIngreso('${item.id}')">${item.paid?'✓':''}</div>
-      <div class="row-label ${item.paid?'done':''}" style="flex:1" ${editMode?`onclick="editLabel('ingreso','${item.id}')"`:''}>${item.label}${editMode?' <span style="color:var(--blue);font-size:10px;">✎</span>':''}</div>
+      <div class="row-label ${item.paid?'done':''}" style="flex:1" ${editMode?`onclick="editLabel('ingreso','${item.id}')"`:''}>${esc(item.label)}${item.autoEv?' <span class="auto-tag">auto</span>':''}${editMode?' <span style="color:var(--blue);font-size:10px;">✎</span>':''}</div>
       <div class="row-amount" style="color:var(--green)" ${editMode?`onclick="editAmountGeneric('ingreso','${item.id}')"`:''}>${fmt(item.amount)}${editMode?' <span style="color:var(--blue);font-size:10px;">✎</span>':''}</div>
     </div>`).join('') + `
     <div class="card-total"><span class="total-label">Recibido</span><span class="total-val" style="color:var(--green)">${fmt(ingPagado)} / ${fmt(ing)}</span></div>`;
 
-  // Egresos
   const cats = [...new Set(S.egresos.map(e=>e.cat))];
   const egP = S.egresos.filter(e=>e.paid).reduce((s,e)=>s+e.amount,0);
-
   function egresoRowHtml(e, cat) {
     const labelAttr = editMode ? `onclick="editLabel('egreso','${e.id}')"` : '';
     const amountAttr = editMode ? `onclick="editAmountGeneric('egreso','${e.id}')"` : '';
@@ -722,71 +1064,44 @@ function renderAll() {
         <div class="card-row">
           <div class="check ${e.paid?'done':''}" style="${e.paid?'background:'+CAT_COLOR[cat]:''}" onclick="toggleEgreso('${e.id}')">${e.paid?'✓':''}</div>
           <div style="flex:1" ${labelAttr}>
-            <div class="row-label ${e.paid?'done':''}">${e.label}${editMode?' <span style="color:var(--blue);font-size:10px;">✎</span>':''}</div>
-            ${e.note?`<div class="row-tag">${e.note}</div>`:''}
+            <div class="row-label ${e.paid?'done':''}">${esc(e.label)}${e.autoEv?' <span class="auto-tag">auto</span>':''}${editMode?' <span style="color:var(--blue);font-size:10px;">✎</span>':''}</div>
+            ${e.note?`<div class="row-tag">${esc(e.note)}</div>`:''}
           </div>
           <div class="row-amount" style="color:${CAT_COLOR[cat]}" ${amountAttr}>${fmt(e.amount)}${editMode?' <span style="color:var(--blue);font-size:10px;">✎</span>':''}</div>
         </div>`;
   }
-
   document.getElementById('egresosContent').innerHTML = `<div class="section-title">Egresos fijos del mes</div>` +
     cats.map(cat => {
       const items = S.egresos.filter(e=>e.cat===cat);
-      const subgroups = {};
-      const flat = [];
-      items.forEach(e => { if (e.subgroup) { (subgroups[e.subgroup] = subgroups[e.subgroup]||[]).push(e); } else flat.push(e); });
-      let rowsHtml = '';
-      Object.keys(subgroups).forEach(sg => {
-        const sgTotal = subgroups[sg].reduce((s,e)=>s+e.amount,0);
-        rowsHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px 4px;">
-          <span style="font-size:10px;font-weight:800;color:var(--dim);text-transform:uppercase;letter-spacing:0.8px;">${sg}</span>
-          <span style="font-size:12px;font-weight:700;color:var(--muted);">${fmt(sgTotal)}</span>
-        </div>`;
-        rowsHtml += subgroups[sg].map(e=>egresoRowHtml(e,cat)).join('');
-      });
-      rowsHtml += flat.map(e=>egresoRowHtml(e,cat)).join('');
       const catTotal = items.reduce((s,e)=>s+e.amount,0);
-      return `<div class="section-title" style="margin-top:14px;color:${CAT_COLOR[cat]}">${CAT_LABEL[cat]}</div><div class="card">${rowsHtml}<div class="card-total"><span class="total-label">Total ${CAT_LABEL[cat].toLowerCase()}</span><span class="total-val" style="color:${CAT_COLOR[cat]}">${fmt(catTotal)}</span></div></div>`;
+      return `<div class="section-title" style="margin-top:14px;color:${CAT_COLOR[cat]}">${CAT_LABEL[cat]}</div><div class="card">${items.map(e=>egresoRowHtml(e,cat)).join('')}<div class="card-total"><span class="total-label">Total ${CAT_LABEL[cat].toLowerCase()}</span><span class="total-val" style="color:${CAT_COLOR[cat]}">${fmt(catTotal)}</span></div></div>`;
     }).join('') +
     `<div class="card"><div class="card-total"><span class="total-label">Pagado</span><span class="total-val" style="color:var(--red)">${fmt(egP)} / ${fmt(eg)}</span></div></div>`;
 
-  // Consumo
   document.getElementById('consumoRestante').textContent = fmt(disponible) + ' restante';
   const gc = document.getElementById('gastosCard');
-  if (S.gastos.length === 0) {
-    gc.innerHTML = `<div class="empty"><div class="empty-icon">💸</div><div class="empty-text">Sin gastos registrados este mes</div></div>`;
-  } else {
-    gc.innerHTML = S.gastos.slice().reverse().map(g => `
+  gc.innerHTML = S.gastos.length === 0
+    ? `<div class="empty"><div class="empty-icon">💸</div><div class="empty-text">Sin gastos registrados este mes</div></div>`
+    : S.gastos.slice().reverse().map(g => `
       <div class="card-row" style="cursor:default;">
-        <div style="flex:1">
-          <div class="row-label">${g.label}</div>
-          <div class="row-tag" style="color:${CAT_COLOR[g.cat]}">${CAT_LABEL[g.cat]}</div>
-        </div>
+        <div style="flex:1"><div class="row-label">${esc(g.label)}</div><div class="row-tag" style="color:${CAT_COLOR[g.cat]}">${CAT_LABEL[g.cat]}</div></div>
         <div class="row-amount" style="color:var(--red)">-${fmt(g.amount)}</div>
       </div>`).join('');
-  }
 
   const editBtn = document.getElementById('editModeBtn');
   if (editBtn) { editBtn.style.background = editMode ? 'var(--blue)' : 'rgba(255,255,255,0.06)'; editBtn.style.color = editMode ? '#0a0a0f' : 'var(--text)'; }
   const banner = document.getElementById('editModeBanner');
   if (banner) banner.style.display = editMode ? 'block' : 'none';
 }
-
-function toggleEditMode() {
-  editMode = !editMode;
-  renderAll();
-}
-
+function toggleEditMode() { editMode = !editMode; renderAll(); }
 function editLabel(type, id) {
   const arr = type === 'ingreso' ? S.ingresos : S.egresos;
   const item = arr.find(x=>x.id===id);
   if (!item) return;
   const v = prompt('Nuevo nombre:', item.label);
   if (v === null || !v.trim()) return;
-  item.label = v.trim();
-  save(); renderAll();
+  item.label = v.trim(); save(); renderAll();
 }
-
 function editAmountGeneric(type, id) {
   const arr = type === 'ingreso' ? S.ingresos : S.egresos;
   const item = arr.find(x=>x.id===id);
@@ -803,44 +1118,32 @@ function editAmountGeneric(type, id) {
   const n = parseCOPNumber(v);
   if (!isNaN(n) && n >= 0) { item.amount = n; save(); renderAll(); }
 }
-
 function toggleIngreso(id) {
-  S.ingresos = S.ingresos.map(i=>i.id===id?{...i,paid:!i.paid}:i);
+  S.ingresos = S.ingresos.map(i=>i.id===id?{...i,paid:!i.paid,autoEv:undefined}:i);
   save(); renderAll();
 }
-
-
-function toggleEgreso(id) {
-  const e = S.egresos.find(x=>x.id===id);
+// Marca/desmarca un egreso y propaga el efecto a instrumentos (aportes) y al FE.
+function applyEgresoToggle(e) {
   const wasPaid = e.paid;
   e.paid = !e.paid;
-  if (!wasPaid && e.usdBased) {
-    actualizarTRM(e); // Solo se consulta la TRM en el momento en que se marca como pagada
-  } else if (wasPaid && e.usdBased) {
-    // Se desmarcó: vuelve a 0 y se quita la TRM del label, para que no quede un valor calculado "fantasma"
-    e.amount = 0;
-    e.label = `Claude (${e.usdAmount} USD)`;
-  }
-  // Vínculo con inversiones: si se marca como pagado (no estaba) un egreso de inversión con instrumento asignado
-  if (!wasPaid && e.cat === 'inversion' && e.instrumentId) {
+  const sign = wasPaid ? -1 : 1;
+  if (e.cat === 'inversion' && e.instrumentId) {
     const instr = S.instrumentos.find(i=>i.id===e.instrumentId);
-    if (instr) {
-      instr.valorActual += e.amount;
-      instr.aportesPeriodo += e.amount;
-    }
-  } else if (wasPaid && e.cat === 'inversion' && e.instrumentId) {
-    // si se desmarca, revertir
-    const instr = S.instrumentos.find(i=>i.id===e.instrumentId);
-    if (instr) {
-      instr.valorActual -= e.amount;
-      instr.aportesPeriodo -= e.amount;
-    }
+    if (instr) { instr.valorActual += sign * e.amount; instr.aportesPeriodo += sign * e.amount; }
   }
+  if (e.id === 'fe') { S.fe.actual += sign * e.amount; S.fe.lastUpdate = todayISO(); }
+  if (e.usdBased) {
+    if (!wasPaid) actualizarTRM(e);
+    else { e.amount = 0; e.label = `Claude (${e.usdAmount} USD)`; }
+  }
+}
+function toggleEgreso(id) {
+  const e = S.egresos.find(x=>x.id===id);
+  if (!e) return;
+  e.autoEv = undefined;
+  applyEgresoToggle(e);
   save(); renderAll();
 }
-
-// ─── TRM (Tasa Representativa del Mercado) — Banco de la República vía datos.gov.co ────
-// Solo se llama cuando se marca como pagado un egreso "usdBased" (ej. Claude), no en cada carga.
 async function actualizarTRM(item) {
   try {
     const res = await fetch('https://www.datos.gov.co/resource/32sa-8pi3.json?$order=vigenciahasta%20DESC&$limit=1');
@@ -854,16 +1157,12 @@ async function actualizarTRM(item) {
         save(); renderAll();
       }
     }
-  } catch(err) {
-    // Sin internet o API caída: se queda con el último monto calculado, no rompe la app.
-  }
+  } catch(err) { /* sin internet: queda el último valor */ }
 }
-
 function updateFE(val) {
   const n = parseCOPNumber(val);
-  if (!isNaN(n) && n >= 0) { S.fe.actual = n; S.fe.lastUpdate = new Date().toISOString().slice(0,10); save(); renderAll(); }
+  if (!isNaN(n) && n >= 0) { S.fe.actual = n; S.fe.lastUpdate = todayISO(); save(); renderAll(); }
 }
-
 function addGasto() {
   const label = document.getElementById('gastoLabel').value.trim();
   const amount = parseCOPNumber(document.getElementById('gastoAmount').value);
@@ -875,30 +1174,30 @@ function addGasto() {
   document.getElementById('gastoAmount').value = '';
   closeModal('gastoModal');
 }
-
+// Cierre manual (opcional): el cierre normal es automático al abrir la app en un mes nuevo.
 function confirmReset() {
-  if (confirm('¿Cerrar el mes actual y comenzar uno nuevo? Los gastos variables e ingresos se resetearán. El portafolio de inversiones NO se toca.')) {
-    const instrumentosActuales = S.instrumentos;
-    const fe = S.fe;
-    const nu = S.nuDisponible;
-    const aporteEst = S.aporteEstimadoAcumulacion;
-    const lastSnap = S.lastSnapshotDate;
-    S = defaultState();
-    S.instrumentos = instrumentosActuales;
-    S.fe = fe;
-    S.nuDisponible = nu;
-    S.aporteEstimadoAcumulacion = aporteEst;
-    S.lastSnapshotDate = lastSnap;
-    save();
-    renderAll();
-  }
+  if (!confirm('¿Cerrar el mes actual y abrir el siguiente? Se archiva el resumen del mes. El portafolio no se toca.')) return;
+  const target = S.month;
+  const [y, mm] = target.split('-').map(Number);
+  const next = mm === 12 ? `${y+1}-01` : `${y}-${String(mm+1).padStart(2,'0')}`;
+  S.meses.push({mes: S.month, ingresos: totalIngresos(), egresos: totalEgresos(), gastado: totalGastado(), pagados: S.egresos.filter(e=>e.paid).length + '/' + S.egresos.length, gastos: S.gastos});
+  S.month = next;
+  S.ingresos = planIngresos().map(n => { const o = S.ingresos.find(i=>i.id===n.id); return o ? {...n, label:o.label, amount:o.amount} : n; });
+  S.egresos = planEgresos(next);
+  S.gastos = [];
+  save(); renderAll();
 }
 
-// ─── INIT ───────────────────────────────────────────────────────────────────
-document.getElementById('portfolioModal').addEventListener('transitionend', ()=>{});
+// ─── INIT ─────────────────────────────────────────────────────────────────
+if (navigator.storage && navigator.storage.persist) { navigator.storage.persist().catch(()=>{}); }
+autoRollover();
+try { if (!localStorage.getItem(KEY)) save(); } catch(e) {}
 buildPortfolioModalFields();
 renderHome();
 renderAll();
+syncAll(false);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { autoRollover(); renderHome(); syncAll(false); } });
+
 </script>
 </body>
 </html>

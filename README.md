@@ -4,7 +4,7 @@ App personal (un solo `index.html`, sin dependencias) + conector de Gmail (`apps
 
 ## Qué hace sola
 
-- **Cierre de mes automático**: al abrir la app en un mes nuevo archiva el anterior y abre el siguiente con su plan (Nov 2026: 200k Trii → 500 Acciones US, 150k Bancolombia → Fidurenta, 100k FE; Dic 2026: parqueadero en $0).
+- **Cierre de mes automático**: al abrir la app en un mes nuevo archiva el anterior y abre el siguiente con su plan (Nov 2026: 300k Trii → 500 Acciones US, 150k Bancolombia → Fidurenta, 100k FE; Dic 2026: parqueadero en $0).
 - **Conector de Gmail** (cada hora, en tu cuenta de Google): detecta depósitos y compras de Trii, CDT de Nu y transferencias de Bancolombia. La app marca sola el aporte a Trii cuando entra el depósito y los ingresos cuando llega un pago de igual monto.
 - **Respaldo y sincronización**: la app sube su estado (sin la URL ni el token) al Drive del conector y lo recupera en otro dispositivo.
 - **Resumen semanal por correo** (domingos 6 pm) con movimientos y aviso si los saldos tienen más de 14 días.

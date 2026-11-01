@@ -472,7 +472,7 @@ function daysSince(iso) {
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // ─── PLAN DE EGRESOS POR MES ──────────────────────────────────────────────
-// Oct 2026 y anteriores: esquema viejo. Nov 2026 en adelante: sin Nu; 200k Trii (500 Acciones US), 150k Bancolombia (Fidurenta), 100k FE.
+// Oct 2026 y anteriores: esquema viejo. Nov 2026 en adelante: sin Nu; 300k Trii (500 Acciones US), 150k Bancolombia (Fidurenta), 100k FE.
 // Diciembre 2026: parqueadero queda libre (0). Lavada de carro: se mantiene.
 function planEgresos(m) {
   const nuevo = m >= '2026-11';
@@ -499,7 +499,7 @@ function planEgresos(m) {
   }
   return [
     {id:'fe', label:'Fondo de Emergencia (Nu)', amount:100000, paid:false, cat:'ahorro'},
-    {id:'inv_trii', label:'Trii → 500 Acciones US', amount:200000, paid:false, cat:'inversion', instrumentId:'acc500us'},
+    {id:'inv_trii', label:'Trii → 500 Acciones US', amount:300000, paid:false, cat:'inversion', instrumentId:'acc500us'},
     {id:'inv_fic', label:'Bancolombia → Fidurenta', amount:150000, paid:false, cat:'inversion', instrumentId:'fidurenta'},
     ...efectivo, ...suscripciones,
   ];
@@ -519,7 +519,7 @@ function instrumentosSeed() {
   return [
     {id:'acciones_etf', nombre:'Acciones y ETFs (agregado)', tipo:'accion', plataforma:'Trii', valorActual:2607760, valorAnterior:2607760, aportesPeriodo:0, benchmark:'IUITCO sin stop-loss — rebalancear solo si supera 35-40% del portafolio total. Detalle por acción pendiente de captura.', proximo:'Sin fecha definida'},
     {id:'acciones_dinamico', nombre:'Acciones Dinámico', tipo:'fondo', plataforma:'Trii · acumulación', valorActual:2620000, valorAnterior:2620000, aportesPeriodo:0, aprox:true, esAcumulacion:true, pisoMinimo:1000000, metaAcumulada:1500000, benchmark:'Piso $1.000.000 + acumular $1.500.000 → compra en bloque', proximo:'Ver contador arriba'},
-    {id:'acc500us', nombre:'500 Acciones US', tipo:'fondo', plataforma:'Trii · largo plazo', valorActual:2390000, valorAnterior:2390000, aportesPeriodo:0, aprox:true, benchmark:'Destino del aporte mensual a Trii (diversifica fuera de acciones colombianas)', proximo:'Aporte mensual de $200.000'},
+    {id:'acc500us', nombre:'500 Acciones US', tipo:'fondo', plataforma:'Trii · largo plazo', valorActual:2390000, valorAnterior:2390000, aportesPeriodo:0, aprox:true, benchmark:'Destino del aporte mensual a Trii (diversifica fuera de acciones colombianas)', proximo:'Aporte mensual de $300.000'},
     {id:'accicuenta', nombre:'Accicuenta Moderado', tipo:'fondo', plataforma:'Trii · largo plazo', valorActual:1463056, valorAnterior:1463056, aportesPeriodo:0, aprox:true, benchmark:'Capa largo plazo — no tocar', proximo:'Sin fecha de movimiento'},
     {id:'trii_efectivo', nombre:'Trii · efectivo disponible', tipo:'efectivo', plataforma:'Trii', valorActual:305656, valorAnterior:305656, aportesPeriodo:0, benchmark:'Saldo sin invertir en la cuenta', proximo:'—'},
     {id:'fidurenta', nombre:'Fidurenta', tipo:'fondo', plataforma:'Bancolombia · largo plazo', valorActual:1557864, valorAnterior:1557864, aportesPeriodo:0, benchmark:'Destino del aporte mensual a Bancolombia. Comisión 1,15%–1,35% E.A. según permanencia (menor cuanto más tiempo)', proximo:'Aporte mensual de $150.000'},
@@ -755,12 +755,12 @@ function renderTraslado() {
   const nu = S.instrumentos.find(i => i.id === 'nu_inversion');
   const el = document.getElementById('trasladoCard');
   if (!nu || nu.valorActual <= 0) { el.innerHTML = ''; return; }
-  const bcPart = Math.round(nu.valorActual * 150 / 350 / 1000) * 1000;   // mismo reparto que el aporte mensual: 150k BC : 200k Trii
+  const bcPart = Math.round(nu.valorActual * 150 / 450 / 1000) * 1000;   // mismo reparto que el aporte mensual: 150k BC : 300k Trii
   const triiPart = nu.valorActual - bcPart;
   el.innerHTML = `<div class="countdown-card" style="border-color:rgba(245,158,11,0.35)">
     <div class="cd-label" style="color:var(--amber)">Traslado pendiente · cerrar Nu inversión</div>
     <div class="cd-title">Mover ${fmt(nu.valorActual)}</div>
-    <div class="cd-sub" style="margin-top:6px">→ Fidurenta ${fmt(bcPart)}<br>→ 500 Acciones US (Trii) ${fmt(triiPart)}<br>Reparto proporcional al aporte mensual (150k : 200k). Mueve el dinero en las apps y luego confirma aquí.</div>
+    <div class="cd-sub" style="margin-top:6px">→ Fidurenta ${fmt(bcPart)}<br>→ 500 Acciones US (Trii) ${fmt(triiPart)}<br>Reparto proporcional al aporte mensual (150k : 300k). Mueve el dinero en las apps y luego confirma aquí.</div>
     <button class="cd-edit" onclick="confirmTraslado(${bcPart},${triiPart})">Ya lo moví</button></div>`;
 }
 function confirmTraslado(bcPart, triiPart) {
